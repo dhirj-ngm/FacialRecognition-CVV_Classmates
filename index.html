@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Face Recognition</title>
+    <style>
+        body { font-family: Arial, sans-serif; background:#f3f4f6; display:flex; justify-content:center; padding:30px; }
+        .card { background: white; padding:20px; border-radius:8px; width:440px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
+        h2 { margin:0 0 12px 0; }
+        input[type=file] { width:100%; }
+        button { padding:8px 12px; margin-top:10px; background:#2563eb; color:white; border:none; border-radius:6px; cursor:pointer; }
+        #preview, #annotated { width:100%; margin-top:12px; display:none; border-radius:6px; }
+        pre { background:#f8fafc; padding:10px; margin-top:12px; border-radius:6px; font-size:13px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Face Recognition</h2>
+        <input type="file" id="fileInput" accept="image/*" />
+        <button id="analyzeBtn">Upload & Recognize</button>
+        <img id="preview" alt="preview" />
+        <img id="annotated" alt="annotated" />
+        <pre id="result"></pre>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const preview = document.getElementById('preview');
+        const annotated = document.getElementById('annotated');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const result = document.getElementById('result');
+
+        fileInput.addEventListener('change', () => {
+            const f = fileInput.files[0];
+            if (f) {
+                preview.src = URL.createObjectURL(f);
+                preview.style.display = 'block';
+                annotated.style.display = 'none';
+                result.textContent = '';
+            }
+        });
+
+        analyzeBtn.addEventListener('click', async () => {
+            const f = fileInput.files[0];
+            if (!f) return alert('Choose an image first');
+            const fd = new FormData();
+            fd.append('file', f);
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = 'Processing...';
+            try {
+                const res = await fetch('/predict', { method: 'POST', body: fd });
+                const data = await res.json();
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = 'Upload & Recognize';
+                if (data.error) {
+                    result.textContent = 'Error: ' + data.error;
+                    return;
+                }
+                const summaryLines = [
+                    `Mediapipe detected: ${data.mediapipe_num_faces}`,
+                    `InsightFace detected: ${data.insightface_num_faces}`,
+                    '',
+                    'Recognitions:'
+                ];
+                data.recognized.forEach((r, i) => {
+                    summaryLines.push(`${i+1}. ${r.name} (score: ${r.score.toFixed(3)}) bbox: ${JSON.stringify(r.bbox)}`);
+                });
+                result.textContent = summaryLines.join('\n');
+
+                if (data.annotated_image_base64) {
+                    annotated.src = "data:image/png;base64," + data.annotated_image_base64;
+                    annotated.style.display = 'block';
+                }
+            } catch (err) {
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = 'Upload & Recognize';
+                result.textContent = 'Error: ' + err.message;
+            }
+        });
+    </script>
+</body>
+</html>
